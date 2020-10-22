@@ -2,6 +2,7 @@ package blockchain7
 
 import (
 	"encoding/hex"
+	"fmt"
 	"log"
 
 	"github.com/boltdb/bolt"
@@ -68,6 +69,8 @@ func (u UTXOSet) FindUTXO(pubKeyHash []byte) []TxOutput {
 			outs := DeserializeOutputs(v)
 
 			for _, out := range outs.Outputs {
+				strpubKeyHash := hex.EncodeToString(out.PubKeyHash)
+				fmt.Println(strpubKeyHash)
 				if out.IsLockedWithKey(pubKeyHash) {
 					UTXOs = append(UTXOs, out)
 				}
@@ -172,6 +175,8 @@ func (u UTXOSet) Reindex() {
 
 // Update 根据区块中的交易更新数据库的UTXO表和UTXOBlock表
 // 该区块是区块链的Tip区块
+//需要处理的问题是：由于奖励固定，对于同一挖矿人，coinbasetx的ID相同，因此更新时候，
+//如果交易中包含coinbase，那么只能删除一个，不能把UTXO中的该ID对应的coinbase全部删了
 func (u UTXOSet) Update(block *Block) {
 	db := u.Blockchain.Db
 

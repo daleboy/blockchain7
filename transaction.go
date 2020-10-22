@@ -12,15 +12,17 @@ import (
 	"log"
 	"math/big"
 	"strings"
+	"time"
 )
 
 const subsidy = 10 //挖矿奖励
 
 //Transaction 交易结构，代表一个交易
 type Transaction struct {
-	ID   []byte     //交易ID
-	Vin  []TxInput  //交易输入，由上次交易输入（可能多个）
-	Vout []TxOutput //交易输出，由本次交易产生（可能多个）
+	ID        []byte     //交易ID
+	Vin       []TxInput  //交易输入，由上次交易输入（可能多个）
+	Vout      []TxOutput //交易输出，由本次交易产生（可能多个）
+	Timestamp int64      //时间戳，确保每一笔交易的ID完全不同
 }
 
 //IsCoinbase 检查交易是否是创始区块交易
@@ -157,7 +159,7 @@ func (tx *Transaction) TrimmedCopy() Transaction {
 		outputs = append(outputs, TxOutput{vout.Value, vout.PubKeyHash})
 	}
 
-	txCopy := Transaction{tx.ID, inputs, outputs}
+	txCopy := Transaction{tx.ID, inputs, outputs, time.Now().Unix()}
 
 	return txCopy
 }
@@ -220,10 +222,10 @@ func NewCoinbaseTX(to, data string) *Transaction {
 		data = fmt.Sprintf("奖励给%s", to) //fmt.Sprintf将数据格式化后赋值给变量data
 	}
 
-	//初始交易输入结构：引用输出的交易为空:引用交易的ID为空，交易输出值为设为-1
+	//初始交易输入结构：引用输出的交易为空:引用交易的ID为空，交易引用的输出值为设为-1
 	txin := TxInput{[]byte{}, -1, nil, []byte(data)}
-	txout := NewTxOutput(subsidy, to)                           //本次交易的输出结构：奖励值为subsidy，奖励给地址to（当然也只有地址to可以解锁使用这笔钱）
-	tx := Transaction{nil, []TxInput{txin}, []TxOutput{*txout}} //交易ID设为nil
+	txout := NewTxOutput(subsidy, to)                                              //本次交易的输出结构：奖励值为subsidy，奖励给地址to（当然也只有地址to可以解锁使用这笔钱）
+	tx := Transaction{nil, []TxInput{txin}, []TxOutput{*txout}, time.Now().Unix()} //交易ID设为nil
 	tx.ID = tx.Hash()
 
 	return &tx
@@ -268,7 +270,7 @@ func NewUTXOTransaction(wallet *Wallet, to string, amount int, UTXOSet *UTXOSet)
 		outputs = append(outputs, *NewTxOutput(acc-amount, from)) //找零，退给sender
 	}
 
-	tx := Transaction{nil, inputs, outputs}                    //初始交易ID设为nil
+	tx := Transaction{nil, inputs, outputs, time.Now().Unix()} //初始交易ID设为nil
 	tx.ID = tx.Hash()                                          //紧接着设置交易的ID，计算交易ID时候，还没对交易进行签名（即签名字段Signature=nil)
 	UTXOSet.Blockchain.SignTransaction(&tx, wallet.PrivateKey) //利用私钥对交易进行签名，实际上是对交易中的每一个输入进行签名
 

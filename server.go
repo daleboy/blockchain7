@@ -311,26 +311,29 @@ func handleTx(request []byte, bc *Blockchain) {
 	tx := DeserializeTransaction(txData)
 	mempool[hex.EncodeToString(tx.ID)] = tx
 
-	if nodeAddress == knownNodes[0] {
+	if nodeAddress == knownNodes[0] { //当前节点为中心节点
 		for _, node := range knownNodes {
 			if node != nodeAddress && node != payload.AddFrom {
 				sendInv(node, "tx", [][]byte{tx.ID})
 			}
 		}
-	} else {
+	} else { //当前节点为非中心节点
 		if len(mempool) >= 2 && len(miningAddress) > 0 {
 		MineTransactions:
 			var txs []*Transaction
 
 			for id := range mempool {
 				tx := mempool[id]
-				if bc.VerifyTransaction(&tx) {
+				fmt.Printf("%s to be veryfied...\n", hex.EncodeToString(tx.ID))
+
+				if bc.VerifyTransaction(&tx) != true {
 					txs = append(txs, &tx)
+					fmt.Printf("%s veryfied true...\n", hex.EncodeToString(tx.ID))
 				}
 			}
 
 			if len(txs) == 0 {
-				fmt.Println("All transactions are invalid! Waiting for new ones...")
+				fmt.Println("所有的新交易均非法! 等待新的交易...")
 				return
 			}
 
@@ -339,9 +342,9 @@ func handleTx(request []byte, bc *Blockchain) {
 
 			newBlock := bc.MineBlock(txs)
 			UTXOSet := UTXOSet{bc}
-			UTXOSet.Reindex()
+			UTXOSet.Update(newBlock)
 
-			fmt.Println("New block is mined!")
+			fmt.Println("新区块已挖出!")
 
 			for _, tx := range txs {
 				txID := hex.EncodeToString(tx.ID)
@@ -362,6 +365,7 @@ func handleTx(request []byte, bc *Blockchain) {
 }
 
 func handleVersion(request []byte, bc *Blockchain) {
+	fmt.Printf("handleVersion...")
 	var buff bytes.Buffer
 	var payload verzion
 
@@ -373,7 +377,10 @@ func handleVersion(request []byte, bc *Blockchain) {
 	}
 
 	myBestHeight := bc.GetBestHeight()
+	fmt.Printf("myBestHeight is %d\n", myBestHeight)
+
 	foreignerBestHeight := payload.BestHeight
+	fmt.Printf("foreignerBestHeight is %d\n", foreignerBestHeight)
 
 	if myBestHeight < foreignerBestHeight {
 		sendGetBlocks(payload.AddrFrom)

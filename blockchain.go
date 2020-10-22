@@ -30,7 +30,7 @@ type Blockchain struct {
 //此方法通过区块链的指针调用，将修改区块链bc的内容
 func (bc *Blockchain) MineBlock(transactions []*Transaction) *Block {
 	var lastHash []byte //区块链最后一个区块的哈希
-	var lashtHeght int  //区块链最后一个区块的高度
+	var lastHeight int  //区块链最后一个区块的高度
 	//在将交易放入块之前进行签名验证
 	for _, tx := range transactions {
 		if bc.VerifyTransaction(tx) != true {
@@ -44,7 +44,7 @@ func (bc *Blockchain) MineBlock(transactions []*Transaction) *Block {
 
 		blockData := b.Get(lastHash)
 		block := DeserializeBlock(blockData)
-		lashtHeght = block.Height
+		lastHeight = block.Height
 		return nil
 	})
 
@@ -52,7 +52,7 @@ func (bc *Blockchain) MineBlock(transactions []*Transaction) *Block {
 		log.Panic(err)
 	}
 
-	newBlock := NewBlock(transactions, lastHash, lashtHeght) //挖出区块
+	newBlock := NewBlock(transactions, lastHash, lastHeight+1) //区块的高度+1，挖出区块
 
 	err = bc.Db.Update(func(tx *bolt.Tx) error {
 		b := tx.Bucket([]byte(blocksBucket))
@@ -206,54 +206,45 @@ func (bc *Blockchain) FindUnspentTransaction(pubKeyHash []byte) []Transaction {
 //只会区块链新创建后调用一次，其他时候不会调用
 //不再需要调用者的公钥，因为我们保存到bucket的UTXO是所有的未花费输出
 func (bc *Blockchain) FindUTXO() (map[string]TxOutputs, map[string]common.Hash) {
-	UTXO := make(map[string]TxOutputs)         //已花费输出
-	spentTXOs := make(map[string][]int)        //未花费输出
-	UTXOBlocks := make(map[string]common.Hash) //含未花费输出的区块
+	UTXO := make(map[string]TxOutputs)        //未花费输出
+	UTXOBlock := make(map[string]common.Hash) //含有未花费输出的block（只保存tx.ID-block.Hash)
+	spentTXOs := make(map[string][]int)       // 已花费输出
+
 	bci := bc.Iterator()
 
-	//获得已花费输出
 	for {
-		block := bci.Next() //迭代区块链中所有的区块
+		block := bci.Next() //迭代区块链
 
-		for _, tx := range block.Transactions {
-			if tx.IsCoinbase() == false { //coninbase交易没有实际输入
-				for _, in := range tx.Vin {
-					inTxID := hex.EncodeToString(in.Txid)
-					spentTXOs[inTxID] = append(spentTXOs[inTxID], in.Vout)
-				}
-			}
-		}
-
-		if len(block.PrevBlockHash) == 0 {
-			break
-		}
-	}
-
-	//获得未花费输出
-	bci = bc.Iterator()
-	for {
-		block := bci.Next() //迭代区块链中所有的区块
-
-		for _, tx := range block.Transactions {
+		for _, tx := range block.Transactions { //迭代block的交易组
 			txID := hex.EncodeToString(tx.ID)
 
 		Outputs:
 			for outIdx, out := range tx.Vout {
-				// 该输出是否已经花费？
+				// tx的输出是否已经花费
 				if spentTXOs[txID] != nil {
 					for _, spentOutIdx := range spentTXOs[txID] {
 						if spentOutIdx == outIdx {
-							continue Outputs
+							outs := make([]TxOutput, 0)  //创建切片，长度为0，out实际上是一个空数组
+							UTXO[txID] = TxOutputs{outs} //UTXO[txID]为空
+							break Outputs                //返回到Outputs标识处，即退出循环for outIdx, out := range tx.Vout
 						}
 					}
 				}
 
+				//spentTXOs[txID] == nil
 				outs := UTXO[txID]
 				outs.Outputs = append(outs.Outputs, out)
 				UTXO[txID] = outs
-
-				UTXOBlocks[txID] = common.BytesToHash(block.Hash)
 			}
+
+			//SpentTXOs:
+			if tx.IsCoinbase() == false {
+				for _, in := range tx.Vin {
+					inTxID := hex.EncodeToString(in.Txid)
+					spentTXOs[inTxID] = append(spentTXOs[inTxID], int(in.Vout))
+				}
+			}
+			UTXOBlock[txID] = common.BytesToHash(block.Hash)
 		}
 
 		if len(block.PrevBlockHash) == 0 {
@@ -261,7 +252,7 @@ func (bc *Blockchain) FindUTXO() (map[string]TxOutputs, map[string]common.Hash) 
 		}
 	}
 
-	return UTXO, UTXOBlocks
+	return UTXO, UTXOBlock
 }
 
 //dbExists 判断数据库文件是否存在
@@ -309,27 +300,33 @@ func (bc *Blockchain) AddBlock(block *Block) {
 		blockInDb := b.Get(block.Hash)
 
 		if blockInDb != nil {
+			bid := DeserializeBlock(blockInDb)
+			fmt.Println("block in db hash:")
+			fmt.Println(hex.EncodeToString(bid.Hash))
+			fmt.Println(bc.Db.Path())
+
 			return nil
 		}
 
+		fmt.Println("start put the block into database...")
 		blockData := block.Serialize()
 		err := b.Put(block.Hash, blockData)
 		if err != nil {
 			log.Panic(err)
 		}
 
-		lastHash := b.Get([]byte("l"))
+		lastHash := b.Get([]byte("1"))
 		lastBlockData := b.Get(lastHash)
 		lastBlock := DeserializeBlock(lastBlockData)
 
 		if block.Height > lastBlock.Height {
-			err = b.Put([]byte("l"), block.Hash)
+			err = b.Put([]byte("1"), block.Hash)
 			if err != nil {
 				log.Panic(err)
 			}
 			bc.Tip = block.Hash
 		}
-
+		fmt.Println("finished！")
 		return nil
 	})
 	if err != nil {
@@ -341,14 +338,14 @@ func (bc *Blockchain) AddBlock(block *Block) {
 func (bc *Blockchain) GetBestHeight() int {
 	var lastBlock Block
 
-	err := bc.Db.View(func(tx *bolt.Tx) error {
+	err := bc.Db.View(func(tx *bolt.Tx) error { //只读打开，读取最后一个区块的哈希，作为新区块的prevHash
 		b := tx.Bucket([]byte(blocksBucket))
-		lastHash := b.Get([]byte("l"))
+		lastHash := b.Get([]byte("1")) //最后一个区块的哈希的键是字符串"1"
 		blockData := b.Get(lastHash)
 		lastBlock = *DeserializeBlock(blockData)
-
 		return nil
 	})
+
 	if err != nil {
 		log.Panic(err)
 	}
