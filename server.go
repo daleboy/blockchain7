@@ -326,9 +326,11 @@ func handleTx(request []byte, bc *Blockchain) {
 				tx := mempool[id]
 				fmt.Printf("%s to be veryfied...\n", hex.EncodeToString(tx.ID))
 
-				if bc.VerifyTransaction(&tx) != true {
+				if bc.VerifyTransaction(&tx) == true {
 					txs = append(txs, &tx)
-					fmt.Printf("%s veryfied true...\n", hex.EncodeToString(tx.ID))
+					fmt.Printf("%s veryfied true.\n", hex.EncodeToString(tx.ID))
+				} else {
+					fmt.Printf("%s veryfied false.\n", hex.EncodeToString(tx.ID))
 				}
 			}
 

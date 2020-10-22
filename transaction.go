@@ -101,12 +101,10 @@ func (tx *Transaction) Sign(privKey ecdsa.PrivateKey, prevTXs map[string]Transac
 		//，但是比特币允许交易包含引用了不同地址的输入（即来自不同地址发起的交易），所以这里仍然这么做（每一个输入分开签名）
 		//实际上，是将输入的PubKey从自己钱包的PubKey替换为该输入引用输出索引对应的交易的PubKeyHash
 		txCopy.Vin[inID].PubKey = prevTx.Vout[vin.Vout].PubKeyHash
-		txCopy.ID = txCopy.Hash() //计算出交易副本的ID，这个ID与tx.ID显然是不同的
+		dataToSign := fmt.Sprintf("%x\n", txCopy)
 
-		txCopy.Vin[inID].PubKey = nil //将输入中的PubKey设为nil，下次迭代时候用
-
-		///签名的是交易副本的ID
-		r, s, err := ecdsa.Sign(rand.Reader, &privKey, txCopy.ID)
+		///签名的是交易副本数据
+		r, s, err := ecdsa.Sign(rand.Reader, &privKey, []byte(dataToSign)) //对副本进行签名
 		if err != nil {
 			log.Panic(err)
 		}
@@ -116,6 +114,7 @@ func (tx *Transaction) Sign(privKey ecdsa.PrivateKey, prevTXs map[string]Transac
 		//**副本中每一个输入是被分开签名的**
 		//尽管这对于我们的应用并不十分紧要，但是比特币允许交易包含引用了不同地址的输入
 		tx.Vin[inID].Signature = signature
+		txCopy.Vin[inID].PubKey = nil //重置pubkey为nil
 	}
 }
 
@@ -186,8 +185,6 @@ func (tx *Transaction) Verify(prevTXs map[string]Transaction) bool {
 		prevTx := prevTXs[hex.EncodeToString(vin.Txid)]
 		txCopy.Vin[inID].Signature = nil
 		txCopy.Vin[inID].PubKey = prevTx.Vout[vin.Vout].PubKeyHash
-		txCopy.ID = txCopy.Hash()
-		txCopy.Vin[inID].PubKey = nil
 
 		//解包存储在`TXInput.Signature`和`TXInput.PubKey`中的值
 
@@ -204,13 +201,17 @@ func (tx *Transaction) Verify(prevTXs map[string]Transaction) bool {
 		keyLen := len(vin.PubKey) //vin.PubKey为原生态公钥数组
 		x.SetBytes(vin.PubKey[:(keyLen / 2)])
 		y.SetBytes(vin.PubKey[(keyLen / 2):])
+
+		dataToVerify := fmt.Sprintf("%x\n", txCopy)
+
 		//从解析的坐标创建一个rawPubKey（原生态公钥）
 		rawPubKey := ecdsa.PublicKey{Curve: curve, X: &x, Y: &y}
 
 		//使用公钥验证副本的签名，是否私钥签名档结果一致（&r和&s是私钥签名txCopy.ID的结果）
-		if ecdsa.Verify(&rawPubKey, txCopy.ID, &r, &s) == false {
+		if ecdsa.Verify(&rawPubKey, []byte(dataToVerify), &r, &s) == false {
 			return false
 		}
+		txCopy.Vin[inID].PubKey = nil
 	}
 
 	return true
