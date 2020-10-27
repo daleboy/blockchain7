@@ -33,7 +33,7 @@ func (cli *CLI) send(from, to string, amount int, nodeID string, mineNow bool) {
 		newBlock := bc.MineBlock(txs)
 		UTXOSet.Update(newBlock)
 	} else { //非挖矿节点
-		sendTx(knownNodes[0], tx)
+		sendTx(knownNodes[0], tx) //发送给中心节点
 	}
 
 	fmt.Println("转账成功！")
