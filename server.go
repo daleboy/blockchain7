@@ -488,6 +488,7 @@ func StartServer(nodeID, minerAddress string) {
 			log.Panic(err)
 		}
 		//并发模式，接收来自客户端的连接请求,对每一个到来的客户端连接创建一个处理连接的并发任务
+		//一旦有连接，前面的阻塞解除，程序将执行到下面的协程
 		go handleConnection(conn, bc)
 	}
 }
