@@ -150,7 +150,7 @@ func (tx *Transaction) TrimmedCopy() Transaction {
 
 	for _, vin := range tx.Vin {
 		//包含了所有的输入和输出，但是`TXInput.Signature`和`TXIput.PubKey`被设置为`nil`
-		//在调用这个方法后，会用引用的前一个交易的输出的PubKeyHash，取代这里的PubKey
+		//在调用这个方法后，会用引用前一个交易的输出的PubKeyHash，取代这里的PubKey
 		inputs = append(inputs, TxInput{vin.Txid, vin.Vout, nil, nil})
 	}
 

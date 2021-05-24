@@ -36,7 +36,7 @@ func (u UTXOSet) FindSpendableOutputs(pubkeyHash []byte, amount int) (int, map[s
 			txID := hex.EncodeToString(k)
 			outs := DeserializeOutputs(v)
 
-			for outIdx, out := range outs.Outputs { //得到足够的未花费输出（不少如需要转账的金额）
+			for outIdx, out := range outs.Outputs { //得到足够的未花费输出（不少于需要转账的金额）
 				if out.IsLockedWithKey(pubkeyHash) && accumulated < amount {
 					accumulated += out.Value
 					unspentOutputs[txID] = append(unspentOutputs[txID], outIdx)

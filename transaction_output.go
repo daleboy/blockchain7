@@ -30,7 +30,7 @@ func (out *TxOutput) IsLockedWithKey(pubKeyHash []byte) bool {
 //注意，这里需要将address进行反编码成实际的地址
 func NewTxOutput(value int, address string) *TxOutput {
 	txo := &TxOutput{value, nil} //构建TxOutput，PubKeyHash暂设为nil
-	txo.Lock([]byte(address))    //接着设定TxOutput的PubKeyHash值
+	txo.Lock([]byte(address))    //接着设定TxOutput的PubKeyHash值进行锁定
 
 	return txo
 }
