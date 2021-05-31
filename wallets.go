@@ -66,6 +66,7 @@ func (ws *Wallets) LoadFromFile(nodeID string) error {
 	}
 
 	var wallets Wallets
+
 	gob.Register(elliptic.P256())
 	decoder := gob.NewDecoder(bytes.NewReader(fileContent))
 	err = decoder.Decode(&wallets)
@@ -84,6 +85,9 @@ func (ws Wallets) SaveToFile(nodeID string) {
 
 	walletFile := fmt.Sprintf(walletFile, nodeID)
 
+	//Wallet的PrivateKey的结构体类型逐层分析下去，有一个结构体字段是priv.PublicKey.Curve，
+	//其类型是elliptic.Curve，而elliptic.Curve是一个interface，实际上在产生wallet时候，
+	//传递的具体实现类型是curve := elliptic.P256()
 	gob.Register(elliptic.P256())
 
 	encoder := gob.NewEncoder(&content)
